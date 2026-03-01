@@ -15,17 +15,37 @@ except Exception as e:  # pragma: no cover
 
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Limit uploads to 20 MB by default
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH", 20 * 1024 * 1024))
+CORS(app)
 
 TOKENS: Dict[str, str] = {}
 
 
 def project_root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # When app.py lives at repo root, this should be the repo root.
+    # When app.py lives in backend/, this still returns the backend dir.
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 def datasets_dir() -> str:
-    return os.path.join(project_root(), "datasets")
+    # Priority:
+    # 1) DATASETS_DIR env var
+    # 2) <same-dir-as-app.py>/datasets
+    # 3) <parent-of-app.py>/datasets
+    env_dir = os.environ.get("DATASETS_DIR")
+    if env_dir:
+        return env_dir
+
+    base = project_root()
+    c1 = os.path.join(base, "datasets")
+    if os.path.isdir(c1):
+        return c1
+    c2 = os.path.join(os.path.dirname(base), "datasets")
+    if os.path.isdir(c2):
+        return c2
+    # Fallback to <same-dir-as-app.py>/datasets (may not exist yet; callers will create as needed)
+    return c1
 
 
 def _list_dataset_files() -> List[str]:
